@@ -62,8 +62,8 @@ when backends are added or removed --- no restarts required.
 ### 1. Clone the repo
 
 ``` bash
-git clone https://github.com/<your-username>/<repo-name>.git
-cd <repo-name>
+git clone https://github.com/ketilaa/etcd-haproxy-demo.git
+cd etcd-haproxy-demo
 ```
 
 ### 2. Start the stack
@@ -136,9 +136,9 @@ Failing to debounce can result in **partial configs**.
 
 This project intentionally **does not use confd**:
 
--   confd binaries are architecture-sensitive
--   confd hides important controller logic
--   rolling your own makes failure modes explicit
+- confd binaries are architecture-sensitive
+- confd hides important controller logic
+- rolling your own makes failure modes explicit
 
 The result is more code --- but far more understanding.
 
@@ -146,15 +146,19 @@ The result is more code --- but far more understanding.
 
 ## 🧪 What This Is (and Is Not)
 
-**This is:** - a learning-oriented distributed systems demo - a minimal
-controller-style reconciler - a clear example of etcd + HAProxy
-integration
+**This is:**
+- a learning-oriented distributed systems demo
+- a minimal controller-style reconciler
+- a clear example of etcd + HAProxy integration
 
-**This is not:** - a production-ready service mesh - a replacement for
-Consul/Nomad/Kubernetes
+**This is not:**
+- a production-ready service mesh
+- a replacement for Consul/Nomad/Kubernetes
 
-If you want this pattern in production, look at: - **Consul** -
-**Nomad** - **Kubernetes**
+If you want this pattern in production, look at:
+- **Consul**
+- **Nomad**
+- **Kubernetes**
 
 ------------------------------------------------------------------------
 
@@ -163,7 +167,11 @@ If you want this pattern in production, look at: - **Consul** -
 This work is licensed under **Creative Commons Zero v1.0 Universal (CC0
 1.0)**.
 
-You are free to: - use - modify - distribute - sell
+You are free to:
+- use
+- modify
+- distribute
+- sell
 
 with **no attribution required**.
 
