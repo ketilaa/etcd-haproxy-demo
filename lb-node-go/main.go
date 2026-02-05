@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	clientv3 "go.etcd.io/etcd/client/v3"
@@ -19,6 +20,11 @@ const (
 	servicePrefix = "/services/backend/"
 	haproxyCfg    = "/etc/haproxy/haproxy.cfg"
 	tmpCfg        = "/etc/haproxy/haproxy.cfg.tmp"
+)
+
+var (
+	haproxyPID int
+	pidMu      sync.Mutex
 )
 
 func main() {
@@ -48,7 +54,6 @@ func main() {
 
 	log.Printf("[INFO] Found %d backend(s) in etcd", len(resp.Kvs))
 
-	// CHANGE #1: do not start HAProxy with zero backends
 	if len(resp.Kvs) > 0 {
 		renderAndReload(resp.Kvs)
 	} else {
@@ -56,7 +61,6 @@ func main() {
 	}
 
 	nextRev := resp.Header.Revision + 1
-
 	go watchLoop(cli, nextRev)
 
 	select {}
@@ -89,12 +93,7 @@ func watchLoop(cli *clientv3.Client, startRev int64) {
 
 	for {
 		ctx := context.Background()
-		rch := cli.Watch(
-			ctx,
-			servicePrefix,
-			clientv3.WithPrefix(),
-			clientv3.WithRev(rev),
-		)
+		rch := cli.Watch(ctx, servicePrefix, clientv3.WithPrefix(), clientv3.WithRev(rev))
 
 		for wresp := range rch {
 			if wresp.Err() != nil {
@@ -105,16 +104,9 @@ func watchLoop(cli *clientv3.Client, startRev int64) {
 			for _, ev := range wresp.Events {
 				switch ev.Type {
 				case mvccpb.PUT:
-					log.Printf(
-						"[INFO] Backend added/updated: %s -> %s",
-						string(ev.Kv.Key),
-						string(ev.Kv.Value),
-					)
+					log.Printf("[INFO] Backend added/updated: %s -> %s", ev.Kv.Key, ev.Kv.Value)
 				case mvccpb.DELETE:
-					log.Printf(
-						"[INFO] Backend removed: %s",
-						string(ev.Kv.Key),
-					)
+					log.Printf("[INFO] Backend removed: %s", ev.Kv.Key)
 				}
 			}
 
@@ -137,7 +129,6 @@ func reconcile(cli *clientv3.Client) {
 		return
 	}
 
-	// CHANGE #1 applies here as well
 	if len(resp.Kvs) == 0 {
 		log.Printf("[INFO] No backends present, skipping HAProxy reload")
 		return
@@ -158,16 +149,9 @@ func renderAndReload(kvs []*mvccpb.KeyValue) {
 	var backends []backend
 
 	for _, kv := range kvs {
-		key := string(kv.Key)
-		val := string(kv.Value)
-		name := filepath.Base(key)
-
-		log.Printf("[DEBUG] Backend: %s -> %s", key, val)
-
-		backends = append(backends, backend{
-			name: name,
-			addr: val,
-		})
+		name := filepath.Base(string(kv.Key))
+		addr := string(kv.Value)
+		backends = append(backends, backend{name, addr})
 	}
 
 	sort.Slice(backends, func(i, j int) bool {
@@ -197,7 +181,6 @@ backend app
     balance roundrobin
 `)
 
-	// CHANGE #2: only enable health checks when more than one backend exists
 	if !singleBackend {
 		b.WriteString("    option httpchk GET /\n")
 		b.WriteString("    default-server inter 2s rise 2 fall 3\n")
@@ -205,17 +188,9 @@ backend app
 
 	for _, be := range backends {
 		if singleBackend {
-			b.WriteString(fmt.Sprintf(
-				"    server %s %s\n",
-				be.name,
-				be.addr,
-			))
+			b.WriteString(fmt.Sprintf("    server %s %s\n", be.name, be.addr))
 		} else {
-			b.WriteString(fmt.Sprintf(
-				"    server %s %s check\n",
-				be.name,
-				be.addr,
-			))
+			b.WriteString(fmt.Sprintf("    server %s %s check\n", be.name, be.addr))
 		}
 	}
 
@@ -231,8 +206,7 @@ listen stats
 		return
 	}
 
-	cmd := exec.Command("haproxy", "-c", "-f", tmpCfg)
-	if err := cmd.Run(); err != nil {
+	if err := exec.Command("haproxy", "-c", "-f", tmpCfg).Run(); err != nil {
 		log.Printf("[ERROR] haproxy config invalid: %v", err)
 		return
 	}
@@ -242,18 +216,29 @@ listen stats
 		return
 	}
 
-	log.Printf("[INFO] HAProxy config updated")
-	startHAProxy()
+	reloadHAProxy()
 }
 
-func startHAProxy() {
-	log.Printf("[INFO] Starting HAProxy...")
+func reloadHAProxy() {
+	pidMu.Lock()
+	defer pidMu.Unlock()
 
-	cmd := exec.Command("haproxy", "-f", haproxyCfg, "-db")
+	args := []string{"-f", haproxyCfg, "-db"}
+	if haproxyPID != 0 {
+		log.Printf("[INFO] Graceful reload HAProxy (old pid %d)", haproxyPID)
+		args = append(args, "-sf", fmt.Sprint(haproxyPID))
+	} else {
+		log.Printf("[INFO] Starting HAProxy for first time")
+	}
+
+	cmd := exec.Command("haproxy", args...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
 	if err := cmd.Start(); err != nil {
-		log.Fatalf("haproxy failed to start: %v", err)
+		log.Fatalf("haproxy failed: %v", err)
 	}
+
+	haproxyPID = cmd.Process.Pid
+	log.Printf("[INFO] HAProxy running with pid %d", haproxyPID)
 }
