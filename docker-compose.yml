@@ -53,7 +53,7 @@ services:
 
   # ===== Load Balancer Nodes =====
   lb1:
-    build: ./lb-node
+    build: ./lb-node-go
     container_name: lb1
     hostname: lb1
     environment:
@@ -70,7 +70,7 @@ services:
       - demo-network
 
   lb2:
-    build: ./lb-node
+    build: ./lb-node-go
     container_name: lb2
     hostname: lb2
     environment:

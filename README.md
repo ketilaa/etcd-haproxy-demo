@@ -112,7 +112,7 @@ docker exec -e ETCDCTL_API=3 etcd1 \
 
     .
     ├── backend/          # Example backend service (self-registers in etcd)
-    ├── lb-node/          # HAProxy image + start.sh controller
+    ├── lb-node-go        # HAProxy image + GO controller
     ├── docker-compose.yml
     ├── README.md
 
