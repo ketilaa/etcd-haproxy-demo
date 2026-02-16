@@ -6,7 +6,7 @@ balancing** using:
 -   **etcd v3** as the source of truth
 -   **HAProxy** as the data plane
 -   **Docker Compose** for local orchestration
--   A custom **controller-style `start.sh`** that watches etcd and
+-   A custom **controller-style** GO program that watches etcd and
     reconciles HAProxy config
 
 Backends register themselves in etcd, and HAProxy updates automatically
@@ -191,6 +191,3 @@ If this helped you understand:
 - or why controllers are hard
 
 then it did its job.
-
-
-
