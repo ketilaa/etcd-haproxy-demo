@@ -98,7 +98,7 @@ services:
     networks:
       - demo-network
     deploy:
-      replicas: 3
+      replicas: 0
 
 networks:
   demo-network:
